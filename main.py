@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import sys
 from tqdm import tqdm
+from datetime import datetime
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -26,6 +27,12 @@ def main():
     parser.add_argument('--dp_model', type=str, default="MPNN_CNN_BindingDB", help="DeepPurpose pre-trained model name")
     
     args = parser.parse_args()
+
+    # 0. Setup Run Directory
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = os.path.join("runs", run_id)
+    os.makedirs(run_dir, exist_ok=True)
+    print(f"--- Run ID: {run_id} | Output Directory: {run_dir} ---")
 
     # 1. Load Data
     print("--- Loading Data ---")
@@ -146,12 +153,12 @@ def main():
         print("="*60 + "\n")
 
     # CSV
-    csv_path = f"{args.output}.csv"
+    csv_path = os.path.join(run_dir, f"{args.output}.csv")
     df_results.to_csv(csv_path, index=False)
     print(f"Results saved to {csv_path}")
     
     # HTML Report
-    html_path = f"{args.output}.html"
+    html_path = os.path.join(run_dir, f"{args.output}.html")
     generate_html_report(df_results, output_path=html_path)
 
 if __name__ == "__main__":

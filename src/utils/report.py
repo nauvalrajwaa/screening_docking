@@ -246,6 +246,3 @@ def generate_html_report(df, output_path="report.html"):
         f.write(html_string)
     
     print(f"HTML Report generated at: {output_path}")
-        f.write(html_string)
-    
-    print(f"HTML Report generated at: {output_path}")

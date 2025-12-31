@@ -62,6 +62,12 @@ class LLMDescriptor:
         if emb1 is None or emb2 is None:
             return 0.0
             
+        # Ensure 2D array for sklearn
+        if len(emb1.shape) == 1:
+            emb1 = emb1.reshape(1, -1)
+        if len(emb2.shape) == 1:
+            emb2 = emb2.reshape(1, -1)
+            
         if metric == 'cosine':
             return cosine_similarity(emb1, emb2)[0][0]
         elif metric == 'euclidean':
