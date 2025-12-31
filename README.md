@@ -41,9 +41,33 @@ python main.py --compounds "path/to/compounds.csv" --controls "path/to/controls.
 *   `--device`: (Optional) `cpu`, `cuda` (NVIDIA GPU), or `mps` (Mac Metal). Default: `cpu`.
 *   `--output`: (Optional) Prefix for output files. Default: `results`.
 *   `--use_deeppurpose`: (Optional) Flag to enable DeepPurpose screening.
+*   `--dp_target`: (Required if using DeepPurpose) Amino acid sequence of the target protein.
+*   `--dp_model`: (Optional) DeepPurpose pre-trained model name. Default: `MPNN_CNN_BindingDB`.
 
-### 2. Using GPU and Specific Models
-To speed up processing using a GPU and select a specific model variant:
+### 2. DeepPurpose Screening (DTI)
+To screen your compounds against a specific biological target (e.g., MDR1/P-gp) using Deep Learning:
+
+```bash
+python main.py \
+  --compounds "compounds.csv" \
+  --controls "controls.csv" \
+  --use_deeppurpose \
+  --dp_target "MVS..." \
+  --dp_model "MPNN_CNN_BindingDB"
+```
+
+**Available DeepPurpose Models:**
+
+| Model Name | Drug Encoder | Target Encoder | Dataset | Best For |
+| :--- | :--- | :--- | :--- | :--- |
+| `MPNN_CNN_BindingDB` | Graph (MPNN) | CNN | BindingDB | **General Purpose (Recommended)** |
+| `CNN_CNN_BindingDB` | CNN | CNN | BindingDB | High Speed |
+| `Morgan_AAC_BindingDB` | Fingerprint | Amino Acid Comp. | BindingDB | Baseline / Classical |
+| `MPNN_CNN_DAVIS` | Graph (MPNN) | CNN | DAVIS | **Kinase Targets** |
+| `MPNN_CNN_KIBA` | Graph (MPNN) | CNN | KIBA | Kinase Targets |
+
+### 3. Using GPU and Specific LLM Models
+To speed up processing using a GPU and select a specific LLM variant:
 
 ```bash
 python main.py --compounds "data.csv" --controls "ctrl.csv" --device cuda --model chemberta-77m

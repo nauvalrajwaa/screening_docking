@@ -9,50 +9,64 @@ except ImportError:
     DEEPPURPOSE_AVAILABLE = False
 
 class DeepPurposeScreener:
-    def __init__(self, model_type='ADMET', model_name='MPNN_ADMET'):
+    def __init__(self, target_seq=None, model_name='MPNN_CNN_BindingDB'):
         self.available = DEEPPURPOSE_AVAILABLE
+        self.target_seq = target_seq
+        self.model_name = model_name
+        self.model = None
+        
         if not self.available:
             print("Warning: DeepPurpose library not found. Screening will be skipped.")
             return
-        
-        self.model = None
-        # This is a simplified loader. In a real scenario, you might want to load specific pre-trained models.
-        # For demonstration, we will assume we are loading a pre-trained ADMET model if requested.
-        # DeepPurpose has many pretrained models.
-        
-        # Example: Load a pre-trained model for a specific property if needed.
-        # For now, we will just set up the infrastructure.
-        print(f"DeepPurpose initialized. Ready for {model_type} screening.")
-
-    def predict_properties(self, smiles_list):
-        """
-        Runs prediction on a list of SMILES.
-        This is a placeholder for actual DeepPurpose inference which usually requires
-        loading a specific model (e.g. for DTI or ADMET).
-        """
-        if not self.available:
-            return [None] * len(smiles_list)
-        
-        # Example: If we had a loaded model 'self.model'
-        # X_pred = utils.data_process(X_drug=smiles_list, ...)
-        # y_pred = self.model.predict(X_pred)
-        
-        # Since we don't have a specific model file or target in the prompt, 
-        # we will return a dummy result or a message.
-        # To make this useful, let's assume the user wants to use it for encoding 
-        # or if they have a model path, they can load it.
-        
-        print("DeepPurpose screening: No specific model loaded. Returning placeholders.")
-        return ["N/A"] * len(smiles_list)
-
-    def screen_dti(self, drugs, target_seq):
-        """
-        Screen drugs against a target sequence using a DTI model.
-        """
-        if not self.available:
-            return None
             
-        # Placeholder for DTI screening logic
-        # X_pred = utils.data_process(X_drug=drugs, X_target=[target_seq]*len(drugs), ...)
-        # ...
-        pass
+        print(f"--- Initializing DeepPurpose ({model_name}) ---")
+        try:
+            from DeepPurpose import models
+            # Load pre-trained model
+            # Note: This will download the model if not present (~100MB+)
+            if 'BindingDB' in model_name or 'DAVIS' in model_name or 'KIBA' in model_name:
+                self.model = models.model_pretrained(model=model_name)
+                self.mode = 'DTI'
+                if not self.target_seq:
+                    print("Warning: DTI model loaded but no target sequence provided via --dp_target.")
+            else:
+                # Assume ADMET or other property prediction
+                # DeepPurpose has specific functions for ADMET, this is a general placeholder
+                self.mode = 'ADMET'
+                print("Note: ADMET screening requires specific model loading logic.")
+                
+        except Exception as e:
+            print(f"Error loading DeepPurpose model: {e}")
+            self.available = False
+
+    def predict(self, smiles):
+        """
+        Runs prediction for a single SMILES string.
+        """
+        if not self.available or not self.model:
+            return "N/A"
+            
+        try:
+            from DeepPurpose import utils
+            
+            if self.mode == 'DTI':
+                if not self.target_seq:
+                    return "No Target"
+                
+                # Data Process for DTI
+                X_pred = utils.data_process(X_drug=[smiles], X_target=[self.target_seq], y=[0], 
+                                          drug_encoding=self.model.drug_encoding, 
+                                          target_encoding=self.model.target_encoding, 
+                                          split_method='no_split',
+                                          frac=[0,0,0])
+                
+                # Predict
+                y_pred = self.model.predict(X_pred)
+                return round(y_pred[0], 3)
+                
+            else:
+                return "N/A (ADMET Not Impl)"
+                
+        except Exception as e:
+            print(f"DeepPurpose Error: {e}")
+            return "Error"

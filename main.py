@@ -22,6 +22,8 @@ def main():
     parser.add_argument('--device', type=str, default="cpu", choices=['cpu', 'cuda', 'mps'], help="Device to use (cpu, cuda, mps)")
     parser.add_argument('--output', type=str, default="results", help="Output filename prefix")
     parser.add_argument('--use_deeppurpose', action='store_true', help="Enable DeepPurpose screening")
+    parser.add_argument('--dp_target', type=str, help="Target sequence (Amino Acid) for DeepPurpose DTI screening")
+    parser.add_argument('--dp_model', type=str, default="MPNN_CNN_BindingDB", help="DeepPurpose pre-trained model name")
     
     args = parser.parse_args()
 
@@ -46,7 +48,7 @@ def main():
     
     dp_screener = None
     if args.use_deeppurpose:
-        dp_screener = DeepPurposeScreener()
+        dp_screener = DeepPurposeScreener(target_seq=args.dp_target, model_name=args.dp_model)
 
     # 3. Pre-process Controls
     print("--- Pre-processing Controls ---")
@@ -121,9 +123,9 @@ def main():
             
             # DeepPurpose Screening (Optional)
             if dp_screener and dp_screener.available:
-                # Placeholder for actual screening logic
-                preds = dp_screener.predict_properties([smi_comp])
-                entry['DeepPurpose_Pred'] = preds[0]
+                # Predict property/affinity
+                pred_score = dp_screener.predict(smi_comp)
+                entry['DeepPurpose_Score'] = pred_score
 
             results.append(entry)
 
