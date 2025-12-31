@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 from src.utils.data_loader import load_csv, clean_data
 from src.utils.report import generate_html_report
-from src.descriptors.chemical import get_mol, calculate_ecfp, calculate_bro5, calculate_tanimoto
+from src.descriptors.chemical import get_mol, calculate_ecfp, calculate_bro5, calculate_tanimoto, calculate_dice
 from src.descriptors.llm import LLMDescriptor
 from src.screening.deeppurpose_module import DeepPurposeScreener
 
@@ -101,13 +101,23 @@ def main():
             
             # Similarity to Controls
             for ctrl in control_data:
-                # Tanimoto (Chemical)
+                # 1. Chemical Similarities
                 tanimoto = calculate_tanimoto(fp_comp, ctrl['fp'])
-                # Cosine (LLM)
-                cosine = llm_desc.calculate_similarity(emb_comp, ctrl['emb'])
+                dice = calculate_dice(fp_comp, ctrl['fp'])
                 
+                # 2. LLM Similarities
+                cosine = llm_desc.calculate_similarity(emb_comp, ctrl['emb'], metric='cosine')
+                euclidean = llm_desc.calculate_similarity(emb_comp, ctrl['emb'], metric='euclidean')
+                
+                # 3. Hybrid Score (Weighted Average)
+                # Default: 50% Chemical (Tanimoto) + 50% LLM (Cosine)
+                hybrid_score = (0.5 * tanimoto) + (0.5 * cosine)
+
                 entry[f"Tanimoto_{ctrl['name']}"] = round(tanimoto, 3)
-                entry[f"LLM_{ctrl['name']}"] = round(cosine, 3)
+                entry[f"Dice_{ctrl['name']}"] = round(dice, 3)
+                entry[f"LLM_Cos_{ctrl['name']}"] = round(cosine, 3)
+                entry[f"LLM_Euc_{ctrl['name']}"] = round(euclidean, 3)
+                entry[f"Hybrid_{ctrl['name']}"] = round(hybrid_score, 3)
             
             # DeepPurpose Screening (Optional)
             if dp_screener and dp_screener.available:
@@ -120,6 +130,19 @@ def main():
     # 5. Save Results
     df_results = pd.DataFrame(results)
     
+    # Calculate Max Hybrid Score for sorting
+    hybrid_cols = [c for c in df_results.columns if c.startswith('Hybrid_')]
+    if hybrid_cols:
+        df_results['Max_Hybrid_Score'] = df_results[hybrid_cols].max(axis=1)
+        df_results = df_results.sort_values(by='Max_Hybrid_Score', ascending=False)
+        
+        print("\n" + "="*60)
+        print("TOP 5 CANDIDATES (Based on Hybrid Score)")
+        print("="*60)
+        cols_to_show = ['SMILES', 'bRo5_Status', 'Max_Hybrid_Score'] + hybrid_cols[:2] # Show first 2 controls
+        print(df_results[cols_to_show].head(5).to_string(index=False))
+        print("="*60 + "\n")
+
     # CSV
     csv_path = f"{args.output}.csv"
     df_results.to_csv(csv_path, index=False)

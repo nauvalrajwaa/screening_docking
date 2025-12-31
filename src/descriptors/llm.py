@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoTokenizer, AutoModel
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import numpy as np
 
 class LLMDescriptor:
@@ -57,8 +57,16 @@ class LLMDescriptor:
             
         return embeddings
 
-    def calculate_similarity(self, emb1, emb2):
-        """Calculates Cosine similarity between two embeddings"""
+    def calculate_similarity(self, emb1, emb2, metric='cosine'):
+        """Calculates similarity/distance between two embeddings"""
         if emb1 is None or emb2 is None:
             return 0.0
-        return cosine_similarity(emb1, emb2)[0][0]
+            
+        if metric == 'cosine':
+            return cosine_similarity(emb1, emb2)[0][0]
+        elif metric == 'euclidean':
+            # Return negative distance so higher is better (closer) or just raw distance
+            # Usually for distance, lower is better. Here we return raw distance.
+            return euclidean_distances(emb1, emb2)[0][0]
+        else:
+            raise ValueError(f"Unknown metric: {metric}")

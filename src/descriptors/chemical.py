@@ -77,3 +77,19 @@ def calculate_bulk_tanimoto(query_fp, list_fps):
     if query_fp is None or not list_fps:
         return []
     return DataStructs.BulkTanimotoSimilarity(query_fp, list_fps)
+
+def calculate_dice(fp1, fp2):
+    """Calculates Dice Similarity (gives more weight to matches)"""
+    if fp1 is None or fp2 is None:
+        return 0.0
+    return DataStructs.DiceSimilarity(fp1, fp2)
+
+def calculate_tversky(fp1, fp2, alpha=0.8, beta=0.2):
+    """
+    Calculates Tversky Similarity (Asymmetric).
+    Good for substructure matching.
+    alpha=1, beta=0 -> Asymmetric containment (is fp1 inside fp2?)
+    """
+    if fp1 is None or fp2 is None:
+        return 0.0
+    return DataStructs.TverskySimilarity(fp1, fp2, alpha, beta)

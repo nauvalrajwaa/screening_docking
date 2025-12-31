@@ -1,17 +1,19 @@
 import pandas as pd
 import json
+import numpy as np
 
 def generate_html_report(df, output_path="report.html"):
-    """Generates a comprehensive HTML report from the results DataFrame with interactive charts."""
+    """Generates a comprehensive HTML report from the results DataFrame with interactive charts and DataTables."""
     
-    # Prepare data for charts
+    # --- PREPARE DATA FOR CHARTS ---
+    
     # 1. bRo5 Status Distribution
     if 'bRo5_Status' in df.columns:
         status_counts = df['bRo5_Status'].value_counts().to_dict()
     else:
         status_counts = {}
         
-    # 2. MW vs LogP (Chemical Space)
+    # 2. Chemical Space (MW vs LogP)
     scatter_data = []
     if 'MW' in df.columns and 'LogP' in df.columns:
         for _, row in df.iterrows():
@@ -22,48 +24,129 @@ def generate_html_report(df, output_path="report.html"):
                 'status': row.get('bRo5_Status', 'Unknown')
             })
 
-    # Basic styling & Scripts
+    # 3. Similarity Analysis (Hybrid vs Tanimoto vs LLM)
+    # Find columns related to scores
+    hybrid_cols = [c for c in df.columns if c.startswith('Hybrid_')]
+    tanimoto_cols = [c for c in df.columns if c.startswith('Tanimoto_')]
+    llm_cols = [c for c in df.columns if c.startswith('LLM_Cos_')]
+    
+    sim_data = []
+    if hybrid_cols:
+        # Use the max score across all controls for each compound for visualization
+        df['Max_Hybrid'] = df[hybrid_cols].max(axis=1)
+        df['Max_Tanimoto'] = df[tanimoto_cols].max(axis=1) if tanimoto_cols else 0
+        df['Max_LLM'] = df[llm_cols].max(axis=1) if llm_cols else 0
+        
+        for _, row in df.iterrows():
+            sim_data.append({
+                'hybrid': row['Max_Hybrid'],
+                'tanimoto': row['Max_Tanimoto'],
+                'llm': row['Max_LLM']
+            })
+
+    # --- HTML STRUCTURE ---
     html_string = f"""
+    <!DOCTYPE html>
     <html>
     <head>
-        <title>Analysis Report</title>
+        <title>Comprehensive Analysis Report</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        
+        <!-- Plotly.js -->
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        
+        <!-- jQuery & DataTables -->
+        <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+        <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+        <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+        
         <style>
-            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }}
-            .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; }}
-            h1 {{ color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
-            h2 {{ color: #34495e; margin-top: 30px; }}
-            .stats-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }}
-            .chart-box {{ border: 1px solid #eee; padding: 10px; border-radius: 4px; }}
-            table {{ border-collapse: collapse; width: 100%; margin-top: 20px; font-size: 14px; }}
-            th, td {{ border: 1px solid #ddd; padding: 12px 8px; text-align: left; }}
-            th {{ background-color: #f8f9fa; color: #333; font-weight: 600; }}
-            tr:nth-child(even) {{ background-color: #f9f9f9; }}
-            tr:hover {{ background-color: #f1f1f1; }}
-            .pass {{ color: #27ae60; font-weight: bold; background-color: #eafaf1; padding: 2px 6px; border-radius: 4px; }}
-            .fail {{ color: #c0392b; font-weight: bold; background-color: #fdedec; padding: 2px 6px; border-radius: 4px; }}
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f8f9fa; color: #333; }}
+            .header {{ background: linear-gradient(135deg, #2c3e50, #3498db); color: white; padding: 20px 40px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+            .header h1 {{ margin: 0; font-size: 24px; }}
+            .header p {{ margin: 5px 0 0; opacity: 0.8; }}
+            
+            .container {{ max-width: 1400px; margin: 0 auto; padding: 0 20px; }}
+            
+            .card {{ background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 20px; }}
+            .card h2 {{ margin-top: 0; font-size: 18px; color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }}
+            
+            .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
+            .grid-3 {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }}
+            
+            /* Table Styling */
+            table.dataTable thead th {{ background-color: #f1f3f5; color: #495057; }}
+            .pass {{ color: #27ae60; font-weight: bold; background-color: #eafaf1; padding: 2px 8px; border-radius: 12px; font-size: 0.9em; }}
+            .fail {{ color: #c0392b; font-weight: bold; background-color: #fdedec; padding: 2px 8px; border-radius: 12px; font-size: 0.9em; }}
+            
+            .metric-box {{ text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px; }}
+            .metric-val {{ font-size: 24px; font-weight: bold; color: #2c3e50; }}
+            .metric-label {{ font-size: 12px; color: #7f8c8d; text-transform: uppercase; letter-spacing: 1px; }}
         </style>
     </head>
     <body>
+        <div class="header">
+            <h1>🧪 AI-Driven Compound Analysis Report</h1>
+            <p>Generated by Ahmed's Prediction Tool | {len(df)} Compounds Analyzed</p>
+        </div>
+        
         <div class="container">
-            <h1>Comprehensive Analysis Report</h1>
-            <p>Generated by LLM Prediction Tool | Total Compounds: {len(df)}</p>
             
-            <div class="stats-grid">
-                <div class="chart-box">
-                    <div id="statusChart"></div>
+            <!-- Summary Metrics -->
+            <div class="grid-3">
+                <div class="card metric-box">
+                    <div class="metric-val">{len(df)}</div>
+                    <div class="metric-label">Total Compounds</div>
                 </div>
-                <div class="chart-box">
-                    <div id="chemSpaceChart"></div>
+                <div class="card metric-box">
+                    <div class="metric-val">{status_counts.get('PASS', 0)}</div>
+                    <div class="metric-label">Passed bRo5</div>
+                </div>
+                <div class="card metric-box">
+                    <div class="metric-val">{len(hybrid_cols)}</div>
+                    <div class="metric-label">Control Targets</div>
                 </div>
             </div>
 
-            <h2>Detailed Results</h2>
-            <div style="overflow-x: auto;">
+            <!-- Top 5 Candidates -->
+            <div class="card">
+                <h2>🏆 Top 5 Candidates (Best Hybrid Score)</h2>
+                <div style="overflow-x: auto;">
+                    {df.head(5).to_html(classes='display compact', index=False, escape=False).replace('PASS', '<span class="pass">PASS</span>').replace('FAIL', '<span class="fail">FAIL</span>')}
+                </div>
+            </div>
+
+            <!-- Charts Row 1 -->
+            <div class="grid-2">
+                <div class="card">
+                    <h2>bRo5 Compliance</h2>
+                    <div id="statusChart"></div>
+                </div>
+                <div class="card">
+                    <h2>Chemical Space (MW vs LogP)</h2>
+                    <div id="chemSpaceChart"></div>
+                </div>
+            </div>
+            
+            <!-- Charts Row 2 -->
+            <div class="card">
+                <h2>Similarity Distribution (Max Score per Compound)</h2>
+                <div id="simDistChart"></div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="card">
+                <h2>Detailed Results Data</h2>
+                <div style="overflow-x: auto;">
     """
     
-    # Convert DataFrame to HTML
-    table_html = df.to_html(classes='table', index=False, escape=False)
+    # Convert DataFrame to HTML (without index)
+    # We remove the temporary Max columns before printing
+    cols_to_drop = ['Max_Hybrid', 'Max_Tanimoto', 'Max_LLM']
+    df_display = df.drop(columns=[c for c in cols_to_drop if c in df.columns])
+    
+    table_html = df_display.to_html(classes='display compact stripe hover', table_id='resultsTable', index=False, escape=False)
     
     # Highlight PASS/FAIL
     table_html = table_html.replace('PASS', '<span class="pass">PASS</span>')
@@ -71,27 +154,33 @@ def generate_html_report(df, output_path="report.html"):
     
     html_string += table_html
     
-    # Add Scripts for Charts
     html_string += f"""
+                </div>
             </div>
         </div>
         
         <script>
+            // Initialize DataTable
+            $(document).ready( function () {{
+                $('#resultsTable').DataTable({{
+                    "pageLength": 10,
+                    "scrollX": true,
+                    "order": [] // Disable initial sort
+                }});
+            }});
+
             // 1. Pie Chart: bRo5 Status
             var statusData = {json.dumps(status_counts)};
             var pieData = [{{
                 values: Object.values(statusData),
                 labels: Object.keys(statusData),
                 type: 'pie',
-                marker: {{colors: ['#27ae60', '#c0392b', '#f39c12']}}
+                marker: {{colors: ['#27ae60', '#c0392b', '#f39c12']}},
+                hole: 0.4
             }}];
-            var pieLayout = {{
-                title: 'bRo5 Compliance Status',
-                height: 400
-            }};
-            Plotly.newPlot('statusChart', pieData, pieLayout);
+            Plotly.newPlot('statusChart', pieData, {{height: 350, margin: {{t:0, b:0, l:0, r:0}}}});
 
-            // 2. Scatter Plot: Chemical Space (MW vs LogP)
+            // 2. Scatter Plot: Chemical Space
             var rawData = {json.dumps(scatter_data)};
             var trace1 = {{
                 x: rawData.map(d => d.x),
@@ -100,19 +189,54 @@ def generate_html_report(df, output_path="report.html"):
                 type: 'scatter',
                 text: rawData.map(d => d.name + '<br>' + d.status),
                 marker: {{ 
-                    size: 10,
+                    size: 8,
                     color: rawData.map(d => d.status === 'PASS' ? '#27ae60' : '#c0392b'),
-                    opacity: 0.7
+                    opacity: 0.6
                 }}
             }};
-            var scatterLayout = {{
-                title: 'Chemical Space (MW vs LogP)',
-                xaxis: {{title: 'Molecular Weight (MW)'}},
+            var layoutSpace = {{
+                xaxis: {{title: 'Molecular Weight'}},
                 yaxis: {{title: 'LogP'}},
-                height: 400,
+                height: 350,
+                margin: {{t:20, b:40, l:50, r:20}},
                 hovermode: 'closest'
             }};
-            Plotly.newPlot('chemSpaceChart', [trace1], scatterLayout);
+            Plotly.newPlot('chemSpaceChart', [trace1], layoutSpace);
+
+            // 3. Histogram: Similarity Scores
+            var simData = {json.dumps(sim_data)};
+            if (simData.length > 0) {{
+                var traceHybrid = {{
+                    x: simData.map(d => d.hybrid),
+                    type: 'histogram',
+                    opacity: 0.6,
+                    name: 'Hybrid Score',
+                    marker: {{color: '#8e44ad'}}
+                }};
+                var traceTanimoto = {{
+                    x: simData.map(d => d.tanimoto),
+                    type: 'histogram',
+                    opacity: 0.5,
+                    name: 'Tanimoto',
+                    marker: {{color: '#2980b9'}}
+                }};
+                var traceLLM = {{
+                    x: simData.map(d => d.llm),
+                    type: 'histogram',
+                    opacity: 0.5,
+                    name: 'LLM Cosine',
+                    marker: {{color: '#e67e22'}}
+                }};
+                
+                var layoutHist = {{
+                    barmode: 'overlay',
+                    xaxis: {{title: 'Similarity Score (0-1)'}},
+                    yaxis: {{title: 'Count'}},
+                    height: 350,
+                    margin: {{t:20, b:40, l:50, r:20}}
+                }};
+                Plotly.newPlot('simDistChart', [traceHybrid, traceTanimoto, traceLLM], layoutHist);
+            }}
         </script>
     </body>
     </html>
