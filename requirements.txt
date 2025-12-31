@@ -1,0 +1,8 @@
+pandas
+torch
+transformers
+scikit-learn
+rdkit
+tqdm
+DeepPurpose
+accelerate
