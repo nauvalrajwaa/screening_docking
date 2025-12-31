@@ -98,7 +98,7 @@ python main.py --compounds "compounds.csv" --controls "controls.csv" --model "./
 ## Project Structure
 
 ```
-Ahmed/
+Screening_Docking/
 ├── main.py                     # Main CLI for prediction and analysis
 ├── train.py                    # CLI for fine-tuning models
 ├── requirements.txt            # Python dependencies
@@ -116,6 +116,35 @@ Ahmed/
         ├── data_loader.py      # CSV handling
         └── report.py           # HTML/Plotly report generation
 ```
+
+## Input Data Format
+
+The tool accepts CSV files for compounds and controls. The CSV files must contain specific columns for the tool to work correctly. Column names are case-insensitive.
+
+### 1. Compounds CSV (`--compounds`)
+*   **Required Column**: `smiles` (The SMILES string of the compound).
+*   **Optional Columns**: Any other columns will be preserved but not used for calculation.
+
+**Example:**
+| smiles | ID |
+| :--- | :--- |
+| CCO | Comp_1 |
+| c1ccccc1 | Comp_2 |
+
+### 2. Controls CSV (`--controls`)
+*   **Required Column**: `smiles` (The SMILES string of the control compound).
+*   **Optional Column**: `nama` or `nama_kontrol` (Name of the control). If missing, controls will be named `Ctrl_1`, `Ctrl_2`, etc.
+
+**Example:**
+| smiles | nama_kontrol |
+| :--- | :--- |
+| CC(=O)OC1=CC=CC=C1C(=O)O | Aspirin |
+| CN1C=NC2=C1C(=O)N(C(=O)N2C)C | Caffeine |
+
+### 3. Training Data CSV (for Fine-Tuning)
+*   **Required Columns**:
+    *   `smiles`: The chemical structure.
+    *   `label`: Binary label (`0` for Inactive, `1` for Active).
 
 ## Output
 
