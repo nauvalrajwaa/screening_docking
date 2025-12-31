@@ -1,0 +1,16 @@
+id,Compound,smiles,Source
+1,Acetic acid,CC(=O)O,Cuka apel
+2,Curcumin,COC1=C(C=CC(=C1)/C=C/C(=O)CC(=O)/C=C/C2=CC(=C(C=C2)O)OC)O,Kunyit
+3,Limonene,CC1=CCC(CC1)C(=C)C,kulit Jeruk
+4,Lawsone,C1=CC=C2C(=C1)C(=CC(=O)C2=O),Pacar kuku (Henna)
+5,Gallic acid,C1=C(C=C(C(=C1O)O)O)C(=O)O,Bunga merak
+6,Prolylleucine,CC(C)C[C@H](C(=O)O)NC(=O)[C@@H]1CCCN1C(=O)OCC2=CC=CC=C2,Jinten hitam
+7,Bis(4-ethylbenzylidene)sorbitol,CCC1=CC=C(C=C1)C2OCC3C(O2)C(OC(O3)C4=CC=C(C=C4)CC)C(CO)O,Jinten hitam
+"8,""2-(1,3-Benzodioxol-5-yl)-4,5,6,7-tetramethyl-1H-benzimidazole"",CC1=C(C(=C2C(=C1C)NC(=N2)C3=CC4=C(C=C3)OCO4)C)C,Jinten hitam"
+9,eugenol,COC1=C(C=CC(=C1)CC=C)O,Cengkeh
+10,tryptanthrin,C1=CC=C2C(=C1)C(=O)N3C4=CC=CC=C4C(=O)C3=N2,Couroupita guianensis
+11,phaeantharine ,C[N+]1=C(C2=CC(=C(C=C2C=C1)OC)OC)CC3=CC=C(C=C3)OC4=C(C=CC(=C4)CC5=[N+](C=CC6=CC(=C(C=C65)OC)OC)C)OC,Doryphora aromatica
+12,6-acetonyl-N-methyldihydrodecarine,CC(=O)CC1C2=C(C=CC(=C2OC)O)C3=C(N1C)C4=CC5=C(C=C4C=C3)OCO5,Zanthoxylum nitidum 
+13,6-acetonyldihydrochelerythrine,CC(=O)C[C@H]1C2=C(C=CC(=C2OC)OC)C3=C(N1C)C4=CC5=C(C=C4C=C3)OCO5,Zanthoxylum nitidum 
+14,4-methoxy-N-methyl-2-quinolone ,CN1C2=CC=CC=C2C(=CC1=O)OC,Zanthoxylum nitidum 
+15,tetrandine,CN1CCC2=CC(=C3C=C2[C@@H]1CC4=CC=C(C=C4)OC5=C(C=CC(=C5)C[C@H]6C7=C(O3)C(=C(C=C7CCN6C)OC)OC)OC)OC,Stephania tetrandra
