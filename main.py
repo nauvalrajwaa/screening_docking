@@ -14,6 +14,22 @@ from src.descriptors.chemical import get_mol, calculate_ecfp, calculate_bro5, ca
 from src.descriptors.llm import LLMDescriptor
 from src.screening.deeppurpose_module import DeepPurposeScreener
 
+class Logger(object):
+    def __init__(self, log_file):
+        self.terminal = sys.stdout
+        self.log = open(log_file, "a")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        # this flush method is needed for python 3 compatibility.
+        # this handles the flush command by doing nothing.
+        # you might want to specify some extra behavior here.
+        self.terminal.flush()
+        self.log.flush()
+
 def main():
     parser = argparse.ArgumentParser(description="LLM Prediction & Screening Tool")
     parser.add_argument('--compounds', type=str, required=True, help="Path to compounds CSV")
@@ -32,7 +48,13 @@ def main():
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = os.path.join("runs", run_id)
     os.makedirs(run_dir, exist_ok=True)
+    
+    # Setup Logger
+    log_path = os.path.join(run_dir, "run.log")
+    sys.stdout = Logger(log_path)
+    
     print(f"--- Run ID: {run_id} | Output Directory: {run_dir} ---")
+    print(f"Command: {' '.join(sys.argv)}")
 
     # 1. Load Data
     print("--- Loading Data ---")

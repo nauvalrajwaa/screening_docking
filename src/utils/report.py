@@ -12,6 +12,12 @@ def generate_html_report(df, output_path="report.html"):
         status_counts = df['bRo5_Status'].value_counts().to_dict()
     else:
         status_counts = {}
+
+    # 1b. Lipinski Status Distribution
+    if 'Lipinski_Status' in df.columns:
+        status_counts_lipinski = df['Lipinski_Status'].value_counts().to_dict()
+    else:
+        status_counts_lipinski = {}
         
     # 2. Chemical Space (MW vs LogP)
     scatter_data = []
@@ -21,7 +27,8 @@ def generate_html_report(df, output_path="report.html"):
                 'x': row['MW'],
                 'y': row['LogP'],
                 'name': row.get('SMILES', '')[:20] + '...',
-                'status': row.get('bRo5_Status', 'Unknown')
+                'status': row.get('bRo5_Status', 'Unknown'),
+                'lipinski': row.get('Lipinski_Status', 'Unknown')
             })
 
     # 3. Similarity Analysis (Hybrid vs Tanimoto vs LLM)
@@ -104,8 +111,8 @@ def generate_html_report(df, output_path="report.html"):
                     <div class="metric-label">Passed bRo5</div>
                 </div>
                 <div class="card metric-box">
-                    <div class="metric-val">{len(hybrid_cols)}</div>
-                    <div class="metric-label">Control Targets</div>
+                    <div class="metric-val">{status_counts_lipinski.get('PASS', 0)}</div>
+                    <div class="metric-label">Passed Lipinski</div>
                 </div>
             </div>
 
@@ -124,15 +131,21 @@ def generate_html_report(df, output_path="report.html"):
                     <div id="statusChart"></div>
                 </div>
                 <div class="card">
-                    <h2>Chemical Space (MW vs LogP)</h2>
-                    <div id="chemSpaceChart"></div>
+                    <h2>Lipinski Rule of 5 Compliance</h2>
+                    <div id="lipinskiChart"></div>
                 </div>
             </div>
             
             <!-- Charts Row 2 -->
-            <div class="card">
-                <h2>Similarity Distribution (Max Score per Compound)</h2>
-                <div id="simDistChart"></div>
+            <div class="grid-2">
+                <div class="card">
+                    <h2>Chemical Space (MW vs LogP)</h2>
+                    <div id="chemSpaceChart"></div>
+                </div>
+                <div class="card">
+                    <h2>Similarity Distribution (Max Score per Compound)</h2>
+                    <div id="simDistChart"></div>
+                </div>
             </div>
 
             <!-- Data Table -->
@@ -179,6 +192,17 @@ def generate_html_report(df, output_path="report.html"):
                 hole: 0.4
             }}];
             Plotly.newPlot('statusChart', pieData, {{height: 350, margin: {{t:0, b:0, l:0, r:0}}}});
+
+            // 1b. Pie Chart: Lipinski Status
+            var statusDataLipinski = {json.dumps(status_counts_lipinski)};
+            var pieDataLipinski = [{{
+                values: Object.values(statusDataLipinski),
+                labels: Object.keys(statusDataLipinski),
+                type: 'pie',
+                marker: {{colors: ['#27ae60', '#c0392b', '#f39c12']}},
+                hole: 0.4
+            }}];
+            Plotly.newPlot('lipinskiChart', pieDataLipinski, {{height: 350, margin: {{t:0, b:0, l:0, r:0}}}});
 
             // 2. Scatter Plot: Chemical Space
             var rawData = {json.dumps(scatter_data)};

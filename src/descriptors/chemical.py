@@ -40,11 +40,17 @@ def calculate_properties(mol):
     rings = rdMolDescriptors.CalcNumRings(mol)
     aromatic_rings = rdMolDescriptors.CalcNumAromaticRings(mol)
     
-    # bRo5 conditions
+    # bRo5 conditions (Beyond Rule of 5)
     # MW <= 1000, -2 <= LogP <= 10, HBD <= 6, HBA <= 15, PSA <= 250, RotB <= 20
-    cond = [mw<=1000, -2<=logp<=10, hbd<=6, hba<=15, psa<=250, rotb<=20]
-    violations = 6 - sum(cond)
-    status = "PASS" if violations == 0 else f"FAIL({violations})"
+    cond_bro5 = [mw<=1000, -2<=logp<=10, hbd<=6, hba<=15, psa<=250, rotb<=20]
+    violations_bro5 = 6 - sum(cond_bro5)
+    status_bro5 = "PASS" if violations_bro5 == 0 else f"FAIL({violations_bro5})"
+
+    # Lipinski Rule of 5 conditions (Standard Oral Drugs)
+    # MW <= 500, LogP <= 5, HBD <= 5, HBA <= 10
+    cond_lipinski = [mw<=500, logp<=5, hbd<=5, hba<=10]
+    violations_lipinski = 4 - sum(cond_lipinski)
+    status_lipinski = "PASS" if violations_lipinski == 0 else f"FAIL({violations_lipinski})"
     
     return {
         'MW': round(mw, 2),
@@ -57,7 +63,8 @@ def calculate_properties(mol):
         'Fsp3': round(csp3, 3),
         'NumRings': rings,
         'NumAromatic': aromatic_rings,
-        'bRo5_Status': status
+        'bRo5_Status': status_bro5,
+        'Lipinski_Status': status_lipinski
     }
 
 # Alias for backward compatibility
