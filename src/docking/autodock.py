@@ -55,6 +55,9 @@ class AutoDockDocker(Docker):
              '--resnam', output_path
         ]
         
+        if kwargs.get('gpu_id'):
+            cmd.extend(['-D', str(kwargs.get('gpu_id'))])
+        
         print(f"Running AutoDock-GPU: {' '.join(cmd)}")
         try:
              # AutoDock-GPU output parsing is different.

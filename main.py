@@ -59,6 +59,7 @@ def main():
     parser.add_argument('--size_z', type=float, default=20, help="Grid size Z")
     parser.add_argument('--vina_bin', type=str, default='vina', help="Path to Vina binary")
     parser.add_argument('--autodock_bin', type=str, default='autodock-gpu', help="Path to AutoDock-GPU binary")
+    parser.add_argument('--gpu_id', type=str, help="GPU Device ID (e.g., '1' or '0') for AutoDock-GPU")
     parser.add_argument('--active_residues', type=str, help="Comma-separated active residues (e.g., 'A:41,A:145') to center grid")
     
     args = parser.parse_args()
