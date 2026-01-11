@@ -251,9 +251,11 @@ def main():
             return
 
         receptor_file = args.receptor
+        center_calc_file = args.receptor # Default to whatever the user provided
         
         # Auto-Receptor Preparation
         if receptor_file.endswith('.pdb'):
+            center_calc_file = receptor_file # Explicitly use the PDB for center calc
             print(f"Detected .pdb receptor. Converting to .pdbqt...")
             pdbqt_file = receptor_file.replace('.pdb', '.pdbqt')
             if prepare_receptor(receptor_file, pdbqt_file):
@@ -281,7 +283,7 @@ def main():
         center = (args.center_x, args.center_y, args.center_z)
         if args.active_residues:
             print(f"Calculating grid center from residues: {args.active_residues}")
-            center = calculate_center_from_residues(receptor_file, args.active_residues) # Use receptor_file here
+            center = calculate_center_from_residues(center_calc_file, args.active_residues) # Use PDB if available
             if center:
                 print(f"Calculated Center: {center}")
             else:
