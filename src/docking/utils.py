@@ -29,7 +29,7 @@ def convert_smiles_to_pdbqt(smiles, output_path, name="ligand"):
 def prepare_receptor(pdb_file, output_pdbqt):
     """
     Converts a PDB receptor file to PDBQT format using OpenBabel.
-    Adds polar hydrogens and handles partial charges (standard Obabel behavior for receptors).
+    Adds polar hydrogens and Gasteiger partial charges (required for AutoGrid4).
     
     Args:
         pdb_file (str): Path to input PDB file.
@@ -39,23 +39,18 @@ def prepare_receptor(pdb_file, output_pdbqt):
         bool: True if successful, False otherwise.
     """
     try:
-        # obabel -ipdb <input> -opdbqt -O <output> -xr -xn -xp
-        # -xr: output rigid fragments (not really needed for receptor but safe)
-        # -xn: ignore waters (usually good for docking unless water is critical)
-        # -xp: add polar hydrogens
-        # We generally want to add hydrogens (-h) if they are missing.
-        
         cmd = [
             "obabel",
             "-ipdb", pdb_file,
             "-opdbqt",
             "-O", output_pdbqt,
-            "-xn", # No waters
-            "-h",  # Add hydrogens
-            "-p", "7.4" # Protonate residues
+            "-xn",  # No waters
+            "-h",   # Add hydrogens
+            "-p", "7.4",  # Protonate residues
+            "--partialcharge", "gasteiger"  # Add Gasteiger charges for AutoGrid4
         ]
         
-        print(f"Converting receptor {pdb_file} to PDBQT...")
+        print(f"Converting receptor {pdb_file} to PDBQT with Gasteiger charges...")
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         # Post-processing: Remove ROOT/ENDROOT/BRANCH/ENDBRANCH/TORSDOF lines
@@ -65,12 +60,15 @@ def prepare_receptor(pdb_file, output_pdbqt):
             
             with open(output_pdbqt, 'w') as f:
                 for line in lines:
-                    if not line.startswith(('ROOT', 'ENDROOT', 'BRANCH', 'ENDBRANCH', 'TORSDOF')):
+                    if not any(keyword in line for keyword in ['ROOT', 'ENDROOT', 'BRANCH', 'ENDBRANCH', 'TORSDOF']):
                         f.write(line)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"Obabel error converting receptor: {e}")
-        return False
+            
+            print(f"Receptor prepared: {output_pdbqt}")
+            return True
+        else:
+            print(f"Failed to generate {output_pdbqt}")
+            return False
+            
     except Exception as e:
-        print(f"Error preparing receptor: {e}")
+        print(f"Error preparing receptor {pdb_file}: {e}")
         return False

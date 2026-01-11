@@ -298,7 +298,7 @@ def main():
         docking_dir = os.path.join(run_dir, "docking")
         os.makedirs(docking_dir, exist_ok=True)
         
-        # Prepare all ligands first (SMILES -> PDBQT)
+         # Prepare all ligands first (SMILES -> PDBQT)
         # We do this once to avoid re-converting for each mode
         valid_indices = []
         for idx, row in tqdm(docking_candidates.iterrows(), total=len(docking_candidates), desc="Preparing Ligands"):
@@ -312,6 +312,47 @@ def main():
                     print(f"Failed to convert candidate {idx}")
             else:
                valid_indices.append(idx)
+        
+        # Prepare Control Ligand (Most Similar Control)
+        control_pdbqt = None
+        control_name = None
+        control_smiles = None
+        if control_data:
+            print("\n>>> Preparing Control for Docking ...")
+            # Find the most frequently most-similar control across all candidates
+            control_scores = {}
+            hybrid_cols = [c for c in df_results.columns if c.startswith('Hybrid_')]
+            
+            if hybrid_cols:
+                # For each candidate, find which control has the highest hybrid score
+                for idx, row in df_results.iterrows():
+                    max_ctrl = None
+                    max_score = -1
+                    for col in hybrid_cols:
+                        if row[col] > max_score:
+                            max_score = row[col]
+                            max_ctrl = col.replace('Hybrid_', '')
+                    
+                    if max_ctrl:
+                        control_scores[max_ctrl] = control_scores.get(max_ctrl, 0) + 1
+                
+                # Get the most commonly identified best control
+                if control_scores:
+                    best_control_name = max(control_scores, key=control_scores.get)
+                    # Find this control's SMILES
+                    for ctrl in control_data:
+                        if ctrl['name'] == best_control_name:
+                            control_smiles = ctrl['smiles']
+                            control_name = ctrl['name']
+                            break
+                    
+                    if control_smiles:
+                        control_pdbqt = os.path.join(docking_dir, "control_reference.pdbqt")
+                        if convert_smiles_to_pdbqt(control_smiles, control_pdbqt):
+                            print(f"Control Prepared: {control_name}")
+                        else:
+                            print(f"Failed to prepare control: {control_name}")
+                            control_pdbqt = None
 
         # Run Docking for each mode
         for mode in modes_to_run:
@@ -325,6 +366,16 @@ def main():
             
             scores = []
             size = (args.size_x, args.size_y, args.size_z)
+            
+            # Dock control first if available
+            control_score = None
+            if control_pdbqt and os.path.exists(control_pdbqt):
+                print(f"Docking control: {control_name}")
+                control_output = os.path.join(docking_dir, f"control_{mode}_out.pdbqt")
+                control_score = docker.dock(control_pdbqt, receptor_file, center, size, control_output,
+                                           gpu_id=args.gpu_id)
+                if control_score:
+                    print(f"Control ({control_name}) {mode} Score: {control_score} kcal/mol")
             
             for idx in tqdm(docking_candidates.index, desc=f"{mode} Docking"):
                 if idx not in valid_indices:
@@ -349,6 +400,12 @@ def main():
             elif mode == 'vina': 
                 # Prefer Vina for generic 'Docking_Score' content if both run
                 df_results.loc[docking_candidates.index, 'Docking_Score'] = scores
+            
+            # Store control score  
+            if control_score is not None:
+                df_results.loc[:, f'Control_{mode}_Score'] = control_score
+                df_results.loc[:, 'Control_Name'] = control_name
+                df_results.loc[:, 'Control_SMILES'] = control_smiles
 
         # Re-sort/Display
         print("\n" + "="*60)
