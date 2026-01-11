@@ -29,9 +29,30 @@ if command -v apt-get &> /dev/null; then
     # Check Vina
     if ! command -v vina &> /dev/null; then
             echo "[+] Installing AutoDock Vina..."
+            echo "[+] Installing AutoDock Vina..."
             sudo apt-get install -y autodock-vina
     else
             echo "[OK] Vina found."
+    fi
+
+    # Check AutoGrid4
+    if ! command -v autogrid4 &> /dev/null; then
+        echo "[+] Installing AutoGrid4 (AutoDock Suite)..."
+        wget --no-check-certificate https://autodock.scripps.edu/wp-content/uploads/sites/56/2021/10/autodocksuite-4.2.6-x86_64Linux2.tar
+        tar -xvf autodocksuite-4.2.6-x86_64Linux2.tar
+        
+        # Move binaries
+        if [ -f "x86_64Linux2/autogrid4" ]; then
+             echo "[+] AutoGrid4 found. Moving to /usr/local/bin..."
+             sudo mv x86_64Linux2/autogrid4 /usr/local/bin/autogrid4
+             sudo mv x86_64Linux2/autodock4 /usr/local/bin/autodock4 # Install AD4 too just in case
+        fi
+        
+        # Cleanup
+        rm autodocksuite-4.2.6-x86_64Linux2.tar
+        rm -rf x86_64Linux2
+    else
+        echo "[OK] AutoGrid4 found."
     fi
 
     # Check AutoDock-GPU
@@ -57,11 +78,19 @@ if command -v apt-get &> /dev/null; then
         make DEVICE=CUDA NUMWI=64
         
         # Install to local bin or move binary
-        if [ -f "bin/autodock-gpu" ]; then
-            echo "[+] Installation successful. Moving binary to /usr/local/bin..."
-            sudo mv bin/autodock-gpu /usr/local/bin/autodock-gpu
+        # The makefile produces a binary with the wire-count in the name, e.g., autodock_gpu_64wi
+        if [ -f "bin/autodock_gpu_64wi" ]; then
+            echo "[+] Compilation successful. Moving binary to /usr/local/bin..."
+            sudo mv bin/autodock_gpu_64wi /usr/local/bin/autodock-gpu
+        elif [ -n "$(find bin -name 'autodock_gpu_*' -print -quit)" ]; then
+             # Fallback: grab the first matching binary found
+             FOUND_BIN=$(find bin -name 'autodock_gpu_*' -print -quit)
+             echo "[+] Compilation successful (found $FOUND_BIN). Moving to /usr/local/bin..."
+             sudo mv "$FOUND_BIN" /usr/local/bin/autodock-gpu
         else
-            echo "[!] Compilation failed or binary not found."
+            echo "[!] Compilation failed or binary not found in bin/."
+            echo "    Contents of bin/:"
+            ls -ll bin/
         fi
         
         cd ..

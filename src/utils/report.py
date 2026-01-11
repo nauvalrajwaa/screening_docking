@@ -56,24 +56,54 @@ def generate_html_report(df, output_path="report.html"):
 
     # 4. Docking Data
     docking_data = []
+    docking_table_data = []
+    top_docking_candidates = []
     has_docking = 'Docking_Score' in df.columns and df['Docking_Score'].notna().any()
+    has_vina = 'Docking_Score_vina' in df.columns
+    has_autodock = 'Docking_Score_autodock' in df.columns
+    
     if has_docking:
         # Get docking stats
         docking_scores = df['Docking_Score'].dropna().tolist()
         min_dock = min(docking_scores) if docking_scores else 0
         mean_dock = sum(docking_scores) / len(docking_scores) if docking_scores else 0
         
+        # Prepare detailed docking table data with compound names
+        docked_df = df[df['Docking_Score'].notna()].copy()
+        docked_df = docked_df.sort_values('Docking_Score')
+        
+        for idx, row in docked_df.iterrows():
+            # Use 'Compound' name if available, else SMILES
+            compound_name = str(row['Compound']) if 'Compound' in row and pd.notna(row['Compound']) else 'Unknown'
+            smiles = row.get('SMILES', '')[:40] + ('...' if len(row.get('SMILES', '')) > 40 else '')
+            
+            entry = {
+                'name': compound_name,
+                'smiles': smiles,
+                'hybrid': round(row.get('Max_Hybrid', 0), 3),
+                'docking': round(row['Docking_Score'], 2)
+            }
+            
+            # Add mode-specific scores if available
+            if has_vina:
+                entry['vina'] = round(row['Docking_Score_vina'], 2) if pd.notna(row.get('Docking_Score_vina')) else 'N/A'
+            if has_autodock:
+                entry['autodock'] = round(row['Docking_Score_autodock'], 2) if pd.notna(row.get('Docking_Score_autodock')) else 'N/A'
+            
+            docking_table_data.append(entry)
+        
+        # Top 10 docking candidates
+        top_docking_candidates = docking_table_data[:10]
+        
         # Prepare scatter data (Hybrid vs Docking)
-        for _, row in df.iterrows():
-            if pd.notna(row.get('Docking_Score')):
-                # Use 'Compound' name if available, else SMILES
-                label = str(row['Compound']) if 'Compound' in row and pd.notna(row['Compound']) else row.get('SMILES', '')[:20] + '...'
-                
-                docking_data.append({
-                    'hybrid': row.get('Max_Hybrid', 0),
-                    'docking': row['Docking_Score'],
-                    'name': label
-                })
+        for _, row in docked_df.iterrows():
+            label = str(row['Compound']) if 'Compound' in row and pd.notna(row['Compound']) else row.get('SMILES', '')[:20] + '...'
+            
+            docking_data.append({
+                'hybrid': row.get('Max_Hybrid', 0),
+                'docking': row['Docking_Score'],
+                'name': label
+            })
 
     # --- HTML STRUCTURE ---
     html_string = f"""
@@ -171,6 +201,36 @@ def generate_html_report(df, output_path="report.html"):
                     <div id="simDistChart"></div>
                 </div>
             </div>
+            
+            <!-- Top Docking Results (if applicable) -->
+            {'<div class="card" style="margin-bottom: 20px;">' if has_docking else ''}
+                {'<h2>🏆 Top 10 Docking Candidates</h2>' if has_docking else ''}
+                {'<p style="color: #7f8c8d; margin-bottom: 15px;">Best binding affinity predictions (lower score = stronger binding)</p>' if has_docking else ''}
+                {'<table style="width: 100%; border-collapse: collapse;">' if has_docking else ''}
+                    {'<thead>' if has_docking else ''}
+                        {'<tr style="background: #34495e; color: white;">' if has_docking else ''}
+                            {'<th style="padding: 10px; text-align: left;">Rank</th>' if has_docking else ''}
+                            {'<th style="padding: 10px; text-align: left;">Compound</th>' if has_docking else ''}
+                            {'<th style="padding: 10px; text-align: left;">SMILES</th>' if has_docking else ''}
+                            {'<th style="padding: 10px; text-align: right;">Hybrid Score</th>' if has_docking else ''}
+                            {'<th style="padding: 10px; text-align: right;">Docking (kcal/mol)</th>' if has_docking else ''}
+                            {f'<th style="padding: 10px; text-align: right;">Vina</th>' if has_docking and has_vina else ''}
+                            {f'<th style="padding: 10px; text-align: right;">AutoDock-GPU</th>' if has_docking and has_autodock else ''}
+                        {'</tr>' if has_docking else ''}
+                    {'</thead>' if has_docking else ''}
+                    {'<tbody>' if has_docking else ''}
+                        {chr(10).join([f'''<tr style="border-bottom: 1px solid #ecf0f1;">
+                            <td style="padding: 10px; font-weight: bold;">{i+1}</td>
+                            <td style="padding: 10px;"><strong>{cand['name']}</strong></td>
+                            <td style="padding: 10px; font-family: monospace; font-size: 11px;">{cand['smiles']}</td>
+                            <td style="padding: 10px; text-align: right;">{cand['hybrid']}</td>
+                            <td style="padding: 10px; text-align: right; color: #e74c3c; font-weight: bold;">{cand['docking']}</td>
+                            {f'<td style="padding: 10px; text-align: right;">{cand.get("vina", "N/A")}</td>' if has_vina else ''}
+                            {f'<td style="padding: 10px; text-align: right;">{cand.get("autodock", "N/A")}</td>' if has_autodock else ''}
+                        </tr>''' for i, cand in enumerate(top_docking_candidates)]) if has_docking else ''}
+                    {'</tbody>' if has_docking else ''}
+                {'</table>' if has_docking else ''}
+            {'</div>' if has_docking else ''}
             
             <!-- Charts Row 3 (Docking) -->
             <div class="grid-2" style="display: {'block' if has_docking else 'none'}; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
