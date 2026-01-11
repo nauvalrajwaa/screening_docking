@@ -3,7 +3,7 @@ numpy
 torch
 transformers
 scikit-learn
-rdkit
+rdkit-pypi
 tqdm
 DeepPurpose
 accelerate

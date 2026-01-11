@@ -5,6 +5,30 @@ import warnings
 import sys
 from rdkit import Chem
 
+def download_pdb(pdb_id, output_dir="data/pdb"):
+    """
+    Downloads a PDB file.
+    Args:
+        pdb_id (str): PDB ID.
+        output_dir (str): Directory.
+    Returns:
+        str: Path to downloaded file or None.
+    """
+    pdb_id = pdb_id.lower()
+    os.makedirs(output_dir, exist_ok=True)
+    pdbl = PDBList(verbose=False)
+    try:
+        ent_file = pdbl.retrieve_pdb_file(pdb_id, file_format='pdb', pdir=output_dir, overwrite=True)
+        # Rename .ent to .pdb for consistency if needed, or keep as is.
+        # BioPython saves as pdb<id>.ent
+        final_path = os.path.join(output_dir, f"{pdb_id}.pdb")
+        if os.path.exists(ent_file):
+             shutil.move(ent_file, final_path)
+             return final_path
+    except Exception as e:
+        print(f"Error downloading PDB {pdb_id}: {e}")
+        return None
+
 def fetch_ligand_from_pdb(pdb_id, output_dir="data/controls_pdb"):
     """
     Downloads a PDB structure, extracts HETATM ligands, and converts to SMILES.
@@ -17,25 +41,11 @@ def fetch_ligand_from_pdb(pdb_id, output_dir="data/controls_pdb"):
         list: List of dictionaries [{'name': '3HTB_LIG', 'smiles': '...', 'ligand_id': '...'}, ...]
     """
     pdb_id = pdb_id.lower()
-    os.makedirs(output_dir, exist_ok=True)
     
     # 1. Download PDB
-    pdbl = PDBList(verbose=False)
-    # This downloads to current dir or specified?
-    # PDBList usually downloads to <pdb_dir>/<div_code>/pdb<id>.ent
-    # We want to keep it clean.
-    
-    try:
-        ent_file = pdbl.retrieve_pdb_file(pdb_id, file_format='pdb', pdir=output_dir, overwrite=True)
-        # BioPython sometimes returns path, sometimes None if exists?
-        if not os.path.exists(ent_file):
-            print(f"Failed to download PDB {pdb_id}")
-            return []
-            
-        print(f"Downloaded {pdb_id} to {ent_file}")
-    except Exception as e:
-        print(f"Error downloading PDB {pdb_id}: {e}")
-        return []
+    ent_file = download_pdb(pdb_id, output_dir)
+    if not ent_file:
+         return []
 
     # 2. Parse and Find Ligands
     extracted_ligands = []

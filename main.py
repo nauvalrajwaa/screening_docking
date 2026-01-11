@@ -14,7 +14,8 @@ from src.descriptors.chemical import get_mol, calculate_ecfp, calculate_bro5, ca
 from src.descriptors.llm import LLMDescriptor
 from src.screening.deeppurpose_module import DeepPurposeScreener
 from src.docking import VinaDocker, AutoDockDocker, convert_smiles_to_pdbqt, calculate_center_from_residues, prepare_receptor
-from src.utils.pdb import fetch_ligand_from_pdb
+from src.utils.pdb import fetch_ligand_from_pdb, download_pdb
+import re
 
 class Logger(object):
     def __init__(self, log_file):
@@ -61,6 +62,30 @@ def main():
     parser.add_argument('--active_residues', type=str, help="Comma-separated active residues (e.g., 'A:41,A:145') to center grid")
     
     args = parser.parse_args()
+    
+    # --- Smart Receptor Logic ---
+    # Check if receptor is a PDB ID and handle it EARLY so it can be used for controls
+    if args.receptor and re.match(r'^[a-zA-Z0-9]{4}$', args.receptor) and not os.path.exists(args.receptor):
+        pdb_id = args.receptor
+        print(f"Detected PDB ID '{pdb_id}' as receptor. Downloading...")
+        downloaded_path = download_pdb(pdb_id, output_dir="data/receptors")
+        
+        if downloaded_path:
+            print(f"Receptor downloaded to: {downloaded_path}")
+            args.receptor = downloaded_path # Update arg to file path
+            
+            # Auto-sync with pdb_controls if empty
+            if not args.pdb_controls:
+                print(f"Auto-adding '{pdb_id}' to --pdb_controls for screening comparison.")
+                args.pdb_controls = pdb_id
+            elif pdb_id not in args.pdb_controls:
+                # Optional: Add it anyway? User said "automate sync".
+                # If user specified SOME controls, maybe they want those AND the receptor?
+                # For safety, let's append it.
+                print(f"Adding '{pdb_id}' to existing --pdb_controls.")
+                args.pdb_controls += f",{pdb_id}"
+        else:
+            print(f"Warning: Failed to download PDB {pdb_id}. Will assume it is a file path that is missing.")
 
     # 0. Setup Run Directory
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -225,8 +250,9 @@ def main():
             print("Error: Docking mode requires --receptor argument.")
             return
 
-        # Auto-Receptor Preparation
         receptor_file = args.receptor
+        
+        # Auto-Receptor Preparation
         if receptor_file.endswith('.pdb'):
             print(f"Detected .pdb receptor. Converting to .pdbqt...")
             pdbqt_file = receptor_file.replace('.pdb', '.pdbqt')
