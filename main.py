@@ -48,7 +48,7 @@ def main():
     parser.add_argument('--pdb_controls', type=str, help="Comma-separated PDB IDs to fetch ligands from (e.g., '3HTB,1ABC')")
     
     # Docking Arguments
-    parser.add_argument('--docking_mode', type=str, default='none', choices=['none', 'vina', 'autodock'], help="Docking mode")
+    parser.add_argument('--docking_mode', type=str, default='none', choices=['none', 'vina', 'autodock', 'both'], help="Docking mode")
     parser.add_argument('--top_n_dock', type=int, default=10, help="Number of top candidates to dock")
     parser.add_argument('--receptor', type=str, help="Path to receptor PDBQT/Maps")
     parser.add_argument('--center_x', type=float, help="Grid center X")
@@ -266,20 +266,17 @@ def main():
         if not os.path.exists(receptor_file):
             print(f"Error: Receptor file {receptor_file} not found.")
             return
+
+        # Determine Modes
+        modes_to_run = []
+        if args.docking_mode == 'both':
+            modes_to_run = ['vina', 'autodock']
+        else:
+            modes_to_run = [args.docking_mode]
             
-        print(f"--- Starting Docking ({args.docking_mode}) on Top {args.top_n_dock} Candidates ---")
-        
-        # Setup Docker
-        docker = None
-        if args.docking_mode == 'vina':
-            docker = VinaDocker(args.vina_bin)
-        elif args.docking_mode == 'autodock':
-            docker = AutoDockDocker(args.autodock_bin)
-            
-        # Filter top N
-        docking_candidates = df_results.head(args.top_n_dock).copy()
-            
-        # Determine Grid Center
+        print(f"--- Starting Docking ({', '.join(modes_to_run)}) on Top {args.top_n_dock} Candidates ---")
+
+        # Determine Grid Center (Once for all modes)
         center = (args.center_x, args.center_y, args.center_z)
         if args.active_residues:
             print(f"Calculating grid center from residues: {args.active_residues}")
@@ -289,53 +286,79 @@ def main():
             else:
                 print("Error: Could not calculate center from residues. Falling back to manual coordinates.")
                 center = (args.center_x, args.center_y, args.center_z)
-
-        docking_scores = []
         
+        if center[0] is None:
+            print("Error: Grid center coordinates required for docking.")
+            return
+
+        # Filter top N candidates
+        docking_candidates = df_results.head(args.top_n_dock).copy()
         docking_dir = os.path.join(run_dir, "docking")
         os.makedirs(docking_dir, exist_ok=True)
         
-        for idx, row in tqdm(docking_candidates.iterrows(), total=len(docking_candidates), desc="Docking"):
+        # Prepare all ligands first (SMILES -> PDBQT)
+        # We do this once to avoid re-converting for each mode
+        valid_indices = []
+        for idx, row in tqdm(docking_candidates.iterrows(), total=len(docking_candidates), desc="Preparing Ligands"):
             smi = row['SMILES']
             name = f"cand_{idx}"
             ligand_pdbqt = os.path.join(docking_dir, f"{name}.pdbqt")
-            output_pdbqt = os.path.join(docking_dir, f"{name}_out.pdbqt")
-            
-            # Convert to PDBQT
-            if convert_smiles_to_pdbqt(smi, ligand_pdbqt):
-                # Dock
-                size = (args.size_x, args.size_y, args.size_z)
-                    
-                if center[0] is None:
-                    print("Error: Grid center coordinates required.")
-                    docking_scores.append(None)
-                    continue
-
-                score = docker.dock(
-                    ligand_pdbqt, 
-                    receptor_file, 
-                    center, 
-                    size, 
-                    output_pdbqt
-                )
-                docking_scores.append(score)
+            if not os.path.exists(ligand_pdbqt):
+                if convert_smiles_to_pdbqt(smi, ligand_pdbqt):
+                    valid_indices.append(idx)
+                else:
+                    print(f"Failed to convert candidate {idx}")
             else:
-                docking_scores.append(None)
-                    
-        # Add scores back to results
-        # Note: This aligns because we iterated over the slice copy. 
-        # To merge back robustly to the main dataframe:
-        docking_candidates['Docking_Score'] = docking_scores
-        
-        # Update original dataframe
-        # We explicitly update the rows that were docked
-        df_results.loc[docking_candidates.index, 'Docking_Score'] = docking_scores
+               valid_indices.append(idx)
+
+        # Run Docking for each mode
+        for mode in modes_to_run:
+            print(f"\n>>> Running {mode.upper()} Docking ...")
             
-        # Re-sort if we have docking scores? Maybe just leave as is but output new top list
+            docker = None
+            if mode == 'vina':
+                docker = VinaDocker(args.vina_bin)
+            elif mode == 'autodock':
+                docker = AutoDockDocker(args.autodock_bin)
+            
+            scores = []
+            size = (args.size_x, args.size_y, args.size_z)
+            
+            for idx in tqdm(docking_candidates.index, desc=f"{mode} Docking"):
+                if idx not in valid_indices:
+                    scores.append(None)
+                    continue
+                    
+                name = f"cand_{idx}"
+                ligand_pdbqt = os.path.join(docking_dir, f"{name}.pdbqt")
+                output_pdbqt = os.path.join(docking_dir, f"{name}_{mode}_out.pdbqt")
+                
+                score = docker.dock(ligand_pdbqt, receptor_file, center, size, output_pdbqt)
+                scores.append(score)
+            
+            # Save scores to specific column
+            col_name = f'Docking_Score_{mode}'
+            docking_candidates[col_name] = scores
+            df_results.loc[docking_candidates.index, col_name] = scores
+            
+            # If strictly Vina or AutoDock (single mode), also populate generic 'Docking_Score' for backward compat
+            if len(modes_to_run) == 1:
+                df_results.loc[docking_candidates.index, 'Docking_Score'] = scores
+            elif mode == 'vina': 
+                # Prefer Vina for generic 'Docking_Score' content if both run
+                df_results.loc[docking_candidates.index, 'Docking_Score'] = scores
+
+        # Re-sort/Display
         print("\n" + "="*60)
         print("TOP DOCKING RESULTS")
         print("="*60)
-        print(df_results.dropna(subset=['Docking_Score']).sort_values(by='Docking_Score')[['SMILES', 'Max_Hybrid_Score', 'Docking_Score']].to_string(index=False))
+        
+        # Determine columns to show
+        show_cols = ['SMILES', 'Max_Hybrid_Score']
+        for mode in modes_to_run:
+            show_cols.append(f'Docking_Score_{mode}')
+            
+        print(df_results.loc[docking_candidates.index][show_cols].to_string(index=False))
 
     # CSV
     csv_path = os.path.join(run_dir, f"{args.output}.csv")

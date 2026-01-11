@@ -23,10 +23,13 @@ def generate_html_report(df, output_path="report.html"):
     scatter_data = []
     if 'MW' in df.columns and 'LogP' in df.columns:
         for _, row in df.iterrows():
+            # Use 'Compound' name if available, else SMILES
+            label = str(row['Compound']) if 'Compound' in row and pd.notna(row['Compound']) else row.get('SMILES', '')[:20] + '...'
+            
             scatter_data.append({
                 'x': row['MW'],
                 'y': row['LogP'],
-                'name': row.get('SMILES', '')[:20] + '...',
+                'name': label,
                 'status': row.get('bRo5_Status', 'Unknown'),
                 'lipinski': row.get('Lipinski_Status', 'Unknown')
             })
@@ -63,10 +66,13 @@ def generate_html_report(df, output_path="report.html"):
         # Prepare scatter data (Hybrid vs Docking)
         for _, row in df.iterrows():
             if pd.notna(row.get('Docking_Score')):
+                # Use 'Compound' name if available, else SMILES
+                label = str(row['Compound']) if 'Compound' in row and pd.notna(row['Compound']) else row.get('SMILES', '')[:20] + '...'
+                
                 docking_data.append({
                     'hybrid': row.get('Max_Hybrid', 0),
                     'docking': row['Docking_Score'],
-                    'name': row.get('SMILES', '')[:20] + '...'
+                    'name': label
                 })
 
     # --- HTML STRUCTURE ---
