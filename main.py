@@ -308,7 +308,8 @@ def main():
                     
                 if center[0] is None:
                     print("Error: Grid center coordinates required.")
-                    break
+                    docking_scores.append(None)
+                    continue
 
                 score = docker.dock(
                     ligand_pdbqt, 

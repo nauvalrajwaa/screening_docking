@@ -21,16 +21,18 @@ class VinaDocker(Docker):
             '--size_y', str(size[1]),
             '--size_z', str(size[2]),
             '--out', output_path,
-            '--log', log_path,
             '--cpu', str(kwargs.get('cpu', 4))
         ]
         
         print(f"Running Vina: {' '.join(cmd)}")
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            # Vina writes log to stdout if --log is not specified or compatible
+            with open(log_path, 'w') as log_file:
+                subprocess.run(cmd, check=True, stdout=log_file, stderr=subprocess.STDOUT, text=True)
+            
             return self._parse_score(log_path)
         except subprocess.CalledProcessError as e:
-            print(f"Vina failed: {e.stderr}")
+            print(f"Vina failed: {e}")
             return None
         except Exception as e:
             print(f"Vina execution error: {e}")
