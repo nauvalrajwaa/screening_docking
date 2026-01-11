@@ -322,20 +322,20 @@ def main():
             else:
                 docking_scores.append(None)
                     
-            # Add scores back to results
-            # Note: This aligns because we iterated over the slice copy. 
-            # To merge back robustly to the main dataframe:
-            docking_candidates['Docking_Score'] = docking_scores
+        # Add scores back to results
+        # Note: This aligns because we iterated over the slice copy. 
+        # To merge back robustly to the main dataframe:
+        docking_candidates['Docking_Score'] = docking_scores
+        
+        # Update original dataframe
+        # We explicitly update the rows that were docked
+        df_results.loc[docking_candidates.index, 'Docking_Score'] = docking_scores
             
-            # Update original dataframe
-            # We explicitly update the rows that were docked
-            df_results.loc[docking_candidates.index, 'Docking_Score'] = docking_scores
-            
-            # Re-sort if we have docking scores? Maybe just leave as is but output new top list
-            print("\n" + "="*60)
-            print("TOP DOCKING RESULTS")
-            print("="*60)
-            print(df_results.dropna(subset=['Docking_Score']).sort_values(by='Docking_Score')[['SMILES', 'Max_Hybrid_Score', 'Docking_Score']].to_string(index=False))
+        # Re-sort if we have docking scores? Maybe just leave as is but output new top list
+        print("\n" + "="*60)
+        print("TOP DOCKING RESULTS")
+        print("="*60)
+        print(df_results.dropna(subset=['Docking_Score']).sort_values(by='Docking_Score')[['SMILES', 'Max_Hybrid_Score', 'Docking_Score']].to_string(index=False))
 
     # CSV
     csv_path = os.path.join(run_dir, f"{args.output}.csv")

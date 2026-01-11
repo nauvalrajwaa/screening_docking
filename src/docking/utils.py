@@ -57,6 +57,16 @@ def prepare_receptor(pdb_file, output_pdbqt):
         
         print(f"Converting receptor {pdb_file} to PDBQT...")
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Post-processing: Remove ROOT/ENDROOT/BRANCH/ENDBRANCH/TORSDOF lines
+        if os.path.exists(output_pdbqt):
+            with open(output_pdbqt, 'r') as f:
+                lines = f.readlines()
+            
+            with open(output_pdbqt, 'w') as f:
+                for line in lines:
+                    if not line.startswith(('ROOT', 'ENDROOT', 'BRANCH', 'ENDBRANCH', 'TORSDOF')):
+                        f.write(line)
         return True
     except subprocess.CalledProcessError as e:
         print(f"Obabel error converting receptor: {e}")

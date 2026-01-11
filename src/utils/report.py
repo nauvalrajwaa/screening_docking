@@ -51,6 +51,24 @@ def generate_html_report(df, output_path="report.html"):
                 'llm': row['Max_LLM']
             })
 
+    # 4. Docking Data
+    docking_data = []
+    has_docking = 'Docking_Score' in df.columns and df['Docking_Score'].notna().any()
+    if has_docking:
+        # Get docking stats
+        docking_scores = df['Docking_Score'].dropna().tolist()
+        min_dock = min(docking_scores) if docking_scores else 0
+        mean_dock = sum(docking_scores) / len(docking_scores) if docking_scores else 0
+        
+        # Prepare scatter data (Hybrid vs Docking)
+        for _, row in df.iterrows():
+            if pd.notna(row.get('Docking_Score')):
+                docking_data.append({
+                    'hybrid': row.get('Max_Hybrid', 0),
+                    'docking': row['Docking_Score'],
+                    'name': row.get('SMILES', '')[:20] + '...'
+                })
+
     # --- HTML STRUCTURE ---
     html_string = f"""
     <!DOCTYPE html>
@@ -145,6 +163,18 @@ def generate_html_report(df, output_path="report.html"):
                 <div class="card">
                     <h2>Similarity Distribution (Max Score per Compound)</h2>
                     <div id="simDistChart"></div>
+                </div>
+            </div>
+            
+            <!-- Charts Row 3 (Docking) -->
+            <div class="grid-2" style="display: {'block' if has_docking else 'none'}; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div class="card" style="width: 100%;">
+                     <h2>Docking Score Distribution (kcal/mol)</h2>
+                     <div id="dockingHistChart"></div>
+                </div>
+                <div class="card" style="width: 100%;">
+                     <h2>Consensus: Docking vs Hybrid Score</h2>
+                     <div id="consensusChart"></div>
                 </div>
             </div>
 
@@ -260,6 +290,51 @@ def generate_html_report(df, output_path="report.html"):
                     margin: {{t:20, b:40, l:50, r:20}}
                 }};
                 Plotly.newPlot('simDistChart', [traceHybrid, traceTanimoto, traceLLM], layoutHist);
+            }}
+
+            // 4. Docking Charts
+            var hasDocking = { 'true' if has_docking else 'false' };
+            if (hasDocking) {{
+                var dockingRaw = {json.dumps(docking_data)};
+                
+                // Histogram
+                var scores = dockingRaw.map(d => d.docking);
+                var traceDock = {{
+                    x: scores,
+                    type: 'histogram',
+                    marker: {{color: '#e74c3c'}},
+                    name: 'Docking Score'
+                }};
+                var layoutDock = {{
+                    xaxis: {{title: 'Binding Affinity (kcal/mol)'}},
+                    yaxis: {{title: 'Frequency'}},
+                    height: 350,
+                    margin: {{t:20, b:40, l:50, r:20}}
+                }};
+                Plotly.newPlot('dockingHistChart', [traceDock], layoutDock);
+                
+                // Scatter (Consensus)
+                var traceConsensus = {{
+                    x: dockingRaw.map(d => d.hybrid),
+                    y: dockingRaw.map(d => d.docking),
+                    mode: 'markers',
+                    type: 'scatter',
+                    text: dockingRaw.map(d => d.name),
+                    marker: {{
+                        size: 9,
+                        color: '#34495e',
+                        opacity: 0.7
+                    }}
+                }};
+                var layoutCon = {{
+                    xaxis: {{title: 'Hybrid Similarity Score'}},
+                    yaxis: {{title: 'Docking Score (kcal/mol)'}},
+                    title: 'Lower Docking Score + Higher Hybrid Score = Better',
+                    height: 350,
+                    margin: {{t:40, b:40, l:50, r:20}},
+                    hovermode: 'closest'
+                }};
+                Plotly.newPlot('consensusChart', [traceConsensus], layoutCon);
             }}
         </script>
     </body>

@@ -32,7 +32,13 @@ class VinaDocker(Docker):
             
             return self._parse_score(log_path)
         except subprocess.CalledProcessError as e:
-            print(f"Vina failed: {e}")
+            print(f"Vina failed with exit code {e.returncode}")
+            # Print the log file content to show why
+            if os.path.exists(log_path):
+                with open(log_path, 'r') as f:
+                    print(f"--- Vina Log ({log_path}) ---")
+                    print(f.read())
+                    print("-----------------------------")
             return None
         except Exception as e:
             print(f"Vina execution error: {e}")
