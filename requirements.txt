@@ -7,4 +7,4 @@ rdkit
 tqdm
 DeepPurpose
 accelerate
-
+biopython

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "======================================"
-echo "   MetaScreener Setup Script"
+echo "   MetaScreener Setup Script (Linux)"
 echo "======================================"
 
 # 1. Check Python
@@ -13,31 +13,29 @@ fi
 echo "[*] Installing Python dependencies..."
 pip install -r requirements.txt
 
-# 2. Check Homebrew (Mac)
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    if ! command -v brew &> /dev/null; then
-        echo "[WARNING] Homebrew not found. Skipping system package checks."
+# 2. Check System Dependencies (Linux/Debian/Ubuntu)
+if command -v apt-get &> /dev/null; then
+    echo "[*] checking system dependencies..."
+    
+    # Check OpenBabel
+    if ! command -v obabel &> /dev/null; then
+            echo "[+] Installing OpenBabel..."
+            sudo apt-get update
+            sudo apt-get install -y openbabel
     else
-        echo "[*] Checking system dependencies via Homebrew..."
-        
-        # Check OpenBabel
-        if ! command -v obabel &> /dev/null; then
-             echo "[+] Installing OpenBabel..."
-             brew install open-babel
-        else
-             echo "[OK] OpenBabel found."
-        fi
+            echo "[OK] OpenBabel found."
+    fi
 
-        # Check Vina
-        if ! command -v vina &> /dev/null; then
-             echo "[+] Installing AutoDock Vina..."
-             brew install vina
-        else
-             echo "[OK] Vina found."
-        fi
+    # Check Vina
+    if ! command -v vina &> /dev/null; then
+            echo "[+] Installing AutoDock Vina..."
+            sudo apt-get install -y autodock-vina
+    else
+            echo "[OK] Vina found."
     fi
 else
-    echo "[!] Non-Mac OS detected. Please install 'openbabel' and 'vina' manually."
+    echo "[!] 'apt-get' not found. This script supports Debian/Ubuntu-based Linux systems."
+    echo "    Please install 'openbabel' and 'autodock-vina' manually using your package manager."
 fi
 
 echo "======================================"
