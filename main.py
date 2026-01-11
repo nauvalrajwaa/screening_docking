@@ -13,6 +13,8 @@ from src.utils.report import generate_html_report
 from src.descriptors.chemical import get_mol, calculate_ecfp, calculate_bro5, calculate_tanimoto, calculate_dice
 from src.descriptors.llm import LLMDescriptor
 from src.screening.deeppurpose_module import DeepPurposeScreener
+from src.docking import VinaDocker, AutoDockDocker, convert_smiles_to_pdbqt, calculate_center_from_residues, prepare_receptor
+from src.utils.pdb import fetch_ligand_from_pdb
 
 class Logger(object):
     def __init__(self, log_file):
@@ -32,15 +34,31 @@ class Logger(object):
 
 def main():
     parser = argparse.ArgumentParser(description="LLM Prediction & Screening Tool")
-    parser.add_argument('--compounds', type=str, required=True, help="Path to compounds CSV")
-    parser.add_argument('--controls', type=str, required=True, help="Path to controls CSV")
-    parser.add_argument('--model', type=str, default="seyonec/ChemBERTa-zinc-base-v1", 
+    # Input Files
+    parser.add_argument('--compounds', type=str, required=True, help="Path to CSV file containing compounds")
+    parser.add_argument('--controls', type=str, help="Path to CSV file containing control compounds (optional if --pdb_controls is set)")
+    parser.add_argument('--output', type=str, default="experiment_results", help="Base name for output files")
+    parser.add_argument('--model', type=str, default="seyonec/ChemBERta-zinc-base-v1", 
                         help="HuggingFace model name or alias (chemberta-base, chemberta-77m, chemberta-mtr, chemberta-mlm)")
     parser.add_argument('--device', type=str, default="cpu", choices=['cpu', 'cuda', 'mps'], help="Device to use (cpu, cuda, mps)")
-    parser.add_argument('--output', type=str, default="results", help="Output filename prefix")
     parser.add_argument('--use_deeppurpose', action='store_true', help="Enable DeepPurpose screening")
     parser.add_argument('--dp_target', type=str, help="Target sequence (Amino Acid) for DeepPurpose DTI screening")
     parser.add_argument('--dp_model', type=str, default="MPNN_CNN_BindingDB", help="DeepPurpose pre-trained model name")
+    parser.add_argument('--pdb_controls', type=str, help="Comma-separated PDB IDs to fetch ligands from (e.g., '3HTB,1ABC')")
+    
+    # Docking Arguments
+    parser.add_argument('--docking_mode', type=str, default='none', choices=['none', 'vina', 'autodock'], help="Docking mode")
+    parser.add_argument('--top_n_dock', type=int, default=10, help="Number of top candidates to dock")
+    parser.add_argument('--receptor', type=str, help="Path to receptor PDBQT/Maps")
+    parser.add_argument('--center_x', type=float, help="Grid center X")
+    parser.add_argument('--center_y', type=float, help="Grid center Y")
+    parser.add_argument('--center_z', type=float, help="Grid center Z")
+    parser.add_argument('--size_x', type=float, default=20, help="Grid size X")
+    parser.add_argument('--size_y', type=float, default=20, help="Grid size Y")
+    parser.add_argument('--size_z', type=float, default=20, help="Grid size Z")
+    parser.add_argument('--vina_bin', type=str, default='vina', help="Path to Vina binary")
+    parser.add_argument('--autodock_bin', type=str, default='autodock-gpu', help="Path to AutoDock-GPU binary")
+    parser.add_argument('--active_residues', type=str, help="Comma-separated active residues (e.g., 'A:41,A:145') to center grid")
     
     args = parser.parse_args()
 
@@ -60,15 +78,12 @@ def main():
     print("--- Loading Data ---")
     try:
         df_compounds = load_csv(args.compounds)
-        df_control = load_csv(args.controls)
         
         df_compounds = clean_data(df_compounds)
-        df_control = clean_data(df_control)
         
         print(f"Compounds: {len(df_compounds)}")
-        print(f"Controls: {len(df_control)}")
     except Exception as e:
-        print(f"Error loading data: {e}")
+        print(f"Error loading compounds data: {e}")
         return
 
     # 2. Initialize Models
@@ -79,22 +94,52 @@ def main():
     if args.use_deeppurpose:
         dp_screener = DeepPurposeScreener(target_seq=args.dp_target, model_name=args.dp_model)
 
-    # 3. Pre-process Controls
+    # 3. Process Controls
     print("--- Pre-processing Controls ---")
     control_data = []
-    for i, row in df_control.iterrows():
-        smi = row['smiles']
-        name = row.get('nama_kontrol', row.get('nama', f'Ctrl_{i+1}'))
-        mol = get_mol(smi)
-        if mol:
-            fp = calculate_ecfp(mol)
-            emb = llm_desc.get_embedding(smi)
-            control_data.append({
-                'name': name,
-                'smiles': smi,
-                'fp': fp,
-                'emb': emb
-            })
+    
+    # 3a. CSV Controls (Optional)
+    if args.controls:
+        df_control = load_csv(args.controls)
+        df_control = clean_data(df_control)
+        
+        for i, row in df_control.iterrows():
+            smi = row['smiles']
+            name = row.get('nama_kontrol', row.get('nama', f'Ctrl_{i+1}'))
+            mol = get_mol(smi)
+            if mol:
+                fp = calculate_ecfp(mol)
+                emb = llm_desc.get_embedding(smi)
+                control_data.append({
+                    'name': name,
+                    'smiles': smi,
+                    'fp': fp,
+                    'emb': emb
+                })
+
+    # 3b. Fetch PDB Controls
+    if args.pdb_controls:
+        print(f"--- Fetching PDB Controls: {args.pdb_controls} ---")
+        pdb_ids = [pid.strip() for pid in args.pdb_controls.split(',')]
+        for pid in pdb_ids:
+            fetched_ligands = fetch_ligand_from_pdb(pid)
+            for lig in fetched_ligands:
+                print(f"  + Added control: {lig['name']}")
+                mol = get_mol(lig['smiles'])
+                if mol:
+                    fp = calculate_ecfp(mol)
+                    emb = llm_desc.get_embedding(lig['smiles'])
+                    control_data.append({
+                        'name': lig['name'],
+                        'smiles': lig['smiles'],
+                        'fp': fp,
+                        'emb': emb
+                    })
+
+    if len(control_data) == 0:
+        print("Error: No controls provided. Please specify --controls or --pdb_controls.")
+        return
+
     print(f"Valid Controls: {len(control_data)}")
 
     # 4. Process Compounds (Batch Processing)
@@ -174,8 +219,98 @@ def main():
         print(df_results[cols_to_show].head(5).to_string(index=False))
         print("="*60 + "\n")
 
+    # 6. Docking (Optional)
+    if args.docking_mode != 'none':
+        if not args.receptor:
+            print("Error: Docking mode requires --receptor argument.")
+            return
+
+        # Auto-Receptor Preparation
+        receptor_file = args.receptor
+        if receptor_file.endswith('.pdb'):
+            print(f"Detected .pdb receptor. Converting to .pdbqt...")
+            pdbqt_file = receptor_file.replace('.pdb', '.pdbqt')
+            if prepare_receptor(receptor_file, pdbqt_file):
+                receptor_file = pdbqt_file
+            else:
+                print("Failed to convert receptor. Proceeding with original file check...")
+        
+        if not os.path.exists(receptor_file):
+            print(f"Error: Receptor file {receptor_file} not found.")
+            return
+            
+        print(f"--- Starting Docking ({args.docking_mode}) on Top {args.top_n_dock} Candidates ---")
+        
+        # Setup Docker
+        docker = None
+        if args.docking_mode == 'vina':
+            docker = VinaDocker(args.vina_bin)
+        elif args.docking_mode == 'autodock':
+            docker = AutoDockDocker(args.autodock_bin)
+            
+        # Filter top N
+        docking_candidates = df_results.head(args.top_n_dock).copy()
+            
+        # Determine Grid Center
+        center = (args.center_x, args.center_y, args.center_z)
+        if args.active_residues:
+            print(f"Calculating grid center from residues: {args.active_residues}")
+            center = calculate_center_from_residues(receptor_file, args.active_residues) # Use receptor_file here
+            if center:
+                print(f"Calculated Center: {center}")
+            else:
+                print("Error: Could not calculate center from residues. Falling back to manual coordinates.")
+                center = (args.center_x, args.center_y, args.center_z)
+
+        docking_scores = []
+        
+        docking_dir = os.path.join(run_dir, "docking")
+        os.makedirs(docking_dir, exist_ok=True)
+        
+        for idx, row in tqdm(docking_candidates.iterrows(), total=len(docking_candidates), desc="Docking"):
+            smi = row['SMILES']
+            name = f"cand_{idx}"
+            ligand_pdbqt = os.path.join(docking_dir, f"{name}.pdbqt")
+            output_pdbqt = os.path.join(docking_dir, f"{name}_out.pdbqt")
+            
+            # Convert to PDBQT
+            if convert_smiles_to_pdbqt(smi, ligand_pdbqt):
+                # Dock
+                size = (args.size_x, args.size_y, args.size_z)
+                    
+                if center[0] is None:
+                    print("Error: Grid center coordinates required.")
+                    break
+
+                score = docker.dock(
+                    ligand_pdbqt, 
+                    receptor_file, 
+                    center, 
+                    size, 
+                    output_pdbqt
+                )
+                docking_scores.append(score)
+            else:
+                docking_scores.append(None)
+                    
+            # Add scores back to results
+            # Note: This aligns because we iterated over the slice copy. 
+            # To merge back robustly to the main dataframe:
+            docking_candidates['Docking_Score'] = docking_scores
+            
+            # Update original dataframe
+            # We explicitly update the rows that were docked
+            df_results.loc[docking_candidates.index, 'Docking_Score'] = docking_scores
+            
+            # Re-sort if we have docking scores? Maybe just leave as is but output new top list
+            print("\n" + "="*60)
+            print("TOP DOCKING RESULTS")
+            print("="*60)
+            print(df_results.dropna(subset=['Docking_Score']).sort_values(by='Docking_Score')[['SMILES', 'Max_Hybrid_Score', 'Docking_Score']].to_string(index=False))
+
     # CSV
     csv_path = os.path.join(run_dir, f"{args.output}.csv")
+
     df_results.to_csv(csv_path, index=False)
     print(f"Results saved to {csv_path}")
     
